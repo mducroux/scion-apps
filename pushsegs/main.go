@@ -16,6 +16,7 @@ import (
 	"github.com/scionproto/scion/go/lib/pathdb/sqlite"
 	"github.com/scionproto/scion/go/lib/spath"
 	"github.com/scionproto/scion/go/proto"
+	"go/build"
 	"io/ioutil"
 	"os"
 	"path"
@@ -23,7 +24,7 @@ import (
 )
 
 // GOPATH is the root of the GOPATH environment (in development).
-var GOPATH = "/home/mathieu/go" // os.Getenv("$GOPATH")
+var GOPATH = build.Default.GOPATH
 
 //// appsRoot is the root location of scionlab apps.
 //var appsRoot = flag.String("sabin", path.Join(GOPATH, "bin"),
