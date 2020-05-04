@@ -121,7 +121,6 @@ func realMain() error {
 	if err != nil {
 		return err
 	}
-	// defer db.Close()
 
 	log.Info("Starting transaction")
 
@@ -129,13 +128,19 @@ func realMain() error {
 	if err != nil {
 		return err
 	}
-	// defer tx.Rollback()
+	//defer tx.Rollback()
 
 	for _, segmentToRegister := range toRegister {
-		_, err := tx.InsertWithHPCfgIDs(context.Background(), segmentToRegister.Seg, []*query.HPCfgID{})
+		stats, err := tx.InsertWithHPCfgIDs(context.Background(), segmentToRegister.Seg, []*query.HPCfgID{})
 		if err != nil {
 			return err
 		}
+		if stats.Inserted > 0 {
+			log.Info("Inserted: " + segmentToRegister.Seg.Segment.GetLoggingID())
+		} else if stats.Updated > 0 {
+			log.Info("Updated: " + segmentToRegister.Seg.Segment.GetLoggingID())
+		}
+		println(segmentToRegister.String())
 	}
 	if err := tx.Commit(); err != nil {
 		return err
@@ -143,7 +148,8 @@ func realMain() error {
 
 	log.Info("Ending transaction")
 
-	//println(toRegister[0].String())
+	_ = db.Close()
+
 	return nil
 }
 
