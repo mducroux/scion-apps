@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 )
 
-// GOPATH is the root of the GOPATH environment (in development).
+// GOPATH is the root of the GOPATH environment.
 var GOPATH = build.Default.GOPATH
 
 //// appsRoot is the root location of scionlab apps.
@@ -132,7 +132,7 @@ func realMain() error {
 	//defer tx.Rollback()
 
 	for _, segmentToRegister := range toRegister {
-		stats, err := tx.InsertWithHPCfgIDs(context.Background(), segmentToRegister.Seg, []*query.HPCfgID{})
+		stats, err := tx.InsertWithHPCfgIDs(context.Background(), segmentToRegister.Seg, []*query.HPCfgID{&query.NullHpCfgID})
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func createScionSegment(segment Segment) (*seghandler.SegWithHP, error) {
 		Shortcut: false,
 		Peer:     false,
 		TsInt:    shared.TsNow32,
-		ISD:      segment.DstISD,
+		ISD:      segment.DstISD, //srcISD?
 		Hops:     segment.NbHops,
 	}
 	scionSegment, err := seg.NewSeg(infoField)
