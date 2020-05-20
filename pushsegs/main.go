@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 )
 
 // GOPATH is the root of the GOPATH environment.
@@ -46,21 +47,21 @@ type Segments struct {
 }
 
 type Segment struct {
-	SrcISD    uint16    `json:"srcISD"`
-	SrcAS     string    `json:"srcAS"`
-	DstISD    uint16    `json:"dstISD"`
-	DstAS     string    `json:"dstAS"`
-	NbHops    uint8     `json:"nb_hops"`
-	Latency   uint32    `json:"latency"`
-	Bandwidth uint64    `json:"bandwidth"`
+	SrcISD uint16 `json:"srcISD"`
+	SrcAS  string `json:"srcAS"`
+	DstISD uint16 `json:"dstISD"`
+	DstAS  string `json:"dstAS"`
+	NbHops uint8  `json:"nb_hops"`
+	//Latency   uint32    `json:"latency"`
+	//Bandwidth uint64    `json:"bandwidth"`
 	ASEntries []ASEntry `json:"ASentries"`
 }
 
 type ASEntry struct {
-	IA        string  `json:"IA"`
-	Latitude  float32 `json:"latitude"`
-	Longitude float32 `json:"longitude"`
-	Hop       Hop     `json:"hop"`
+	IA string `json:"IA"`
+	//Latitude  float32 `json:"latitude"`
+	//Longitude float32 `json:"longitude"`
+	Hop Hop `json:"hop"`
 }
 
 type Hop struct {
@@ -92,15 +93,13 @@ func realMain() error {
 
 	log.Info("Reading segment file")
 
-	segmentsFile, err := os.Open("segments.txt")
+	data, err := ioutil.ReadFile("path_db_segments.json")
 	if err != nil {
-		return fmt.Errorf("error opening file")
+		return fmt.Errorf("error reading file")
 	}
-	defer segmentsFile.Close()
 
-	byteSegments, _ := ioutil.ReadAll(segmentsFile)
 	var segments Segments
-	if err := json.Unmarshal(byteSegments, &segments); err != nil {
+	if err := json.Unmarshal(data, &segments); err != nil {
 		return fmt.Errorf("error unmarshalling")
 	}
 
@@ -116,12 +115,20 @@ func realMain() error {
 		toRegister = append(toRegister, scionSegment)
 	}
 
+	// Sort to prevent sql deadlock.
+	sort.Slice(toRegister, func(i, j int) bool {
+		return toRegister[i].Seg.Segment.GetLoggingID() < toRegister[j].Seg.Segment.GetLoggingID()
+	})
+
 	log.Info("Opening path db")
 
 	db, err := sqlite.New(*filenameDb)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = db.Close()
+	}()
 
 	log.Info("Starting transaction")
 
@@ -129,27 +136,30 @@ func realMain() error {
 	if err != nil {
 		return err
 	}
-	//defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback() // The rollback will be ignored if the tx has been committed later in the function.
+	}()
 
 	for _, segmentToRegister := range toRegister {
-		stats, err := tx.InsertWithHPCfgIDs(context.Background(), segmentToRegister.Seg, []*query.HPCfgID{&query.NullHpCfgID})
+		_, err := tx.InsertWithHPCfgIDs(context.Background(), segmentToRegister.Seg, []*query.HPCfgID{&query.NullHpCfgID})
 		if err != nil {
 			return err
 		}
-		if stats.Inserted > 0 {
-			log.Info("Inserted: " + segmentToRegister.Seg.Segment.GetLoggingID())
-		} else if stats.Updated > 0 {
-			log.Info("Updated: " + segmentToRegister.Seg.Segment.GetLoggingID())
-		}
-		println(segmentToRegister.String())
+		//if stats.Inserted > 0 {
+		//	log.Info("Inserted: " + segmentToRegister.Seg.Segment.GetLoggingID())
+		//} else if stats.Updated > 0 {
+		//	log.Info("Updated: " + segmentToRegister.Seg.Segment.GetLoggingID())
+		//}
+		//println(segmentToRegister.String())
 	}
+
+	log.Info("Committing transaction")
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
 
 	log.Info("Ending transaction")
-
-	_ = db.Close()
 
 	return nil
 }
@@ -201,7 +211,7 @@ func createScionASEntry(asEntry ASEntry) seg.ASEntry {
 	hf := spath.HopField{
 		ConsIngress: common.IFIDType(asEntry.Hop.InIF),
 		ConsEgress:  common.IFIDType(asEntry.Hop.OutIF),
-		ExpTime:     spath.DefaultHopFExpiry,
+		ExpTime:     spath.MaxTTLField,
 	}
 	hf.Write(rawHop)
 
