@@ -30,10 +30,6 @@ import (
 // GOPATH is the root of the GOPATH environment.
 var GOPATH = build.Default.GOPATH
 
-//// appsRoot is the root location of scionlab apps.
-//var appsRoot = flag.String("sabin", path.Join(GOPATH, "bin"),
-//	"Path to execute the installed scionlab apps binaries")
-
 // scionRoot is the root location of the scion infrastructure.
 var scionRoot = flag.String("sroot", path.Join(GOPATH, "src/github.com/scionproto/scion"),
 	"Path to read SCION root directory of infrastructure")
@@ -42,9 +38,9 @@ var scionGenCache = flag.String("sgenc", path.Join(*scionRoot, "gen-cache"),
 var scionGen = flag.String("sgen", path.Join(*scionRoot, "gen"),
 	"Path to read SCION gen directory of infrastructure config")
 
-var filenamePathDb = flag.String("pathdb", "", "Sqlite DB file")
-
-var filenameTrustDb = flag.String("trustdb", "", "Sqlite DB file")
+//var filenameSegToInsert = flag.String("segments", "path_db_segments.json", "Segments file")
+var filenamePathDb = flag.String("pathdb", "", "Sqlite path DB file")
+var filenameTrustDb = flag.String("trustdb", "", "Sqlite trust DB file")
 
 type Segments struct {
 	Segments []Segment `json:"segments"`
@@ -111,7 +107,7 @@ func realMain() error {
 		return fmt.Errorf("error unmarshalling")
 	}
 
-	log.Info("Opening trust_db: " + (*filenameTrustDb))
+	log.Info("Opening trustdb: " + (*filenameTrustDb))
 	trustDb, err := trustdbsqlite.New(*filenameTrustDb)
 	if err != nil {
 		return err
@@ -162,7 +158,7 @@ func realMain() error {
 		return toRegister[i].Seg.Segment.GetLoggingID() < toRegister[j].Seg.Segment.GetLoggingID()
 	})
 
-	log.Info("Opening path_db: " + (*filenamePathDb))
+	log.Info("Opening pathdb: " + (*filenamePathDb))
 	pathDb, err := sqlite.New(*filenamePathDb)
 	if err != nil {
 		return err
@@ -184,12 +180,6 @@ func realMain() error {
 		if err != nil {
 			return err
 		}
-		//if stats.Inserted > 0 {
-		//	log.Info("Inserted: " + segmentToRegister.Seg.Segment.GetLoggingID())
-		//} else if stats.Updated > 0 {
-		//	log.Info("Updated: " + segmentToRegister.Seg.Segment.GetLoggingID())
-		//}
-		//println(segmentToRegister.String())
 	}
 
 	log.Info("Committing pathdb transaction")
@@ -197,7 +187,6 @@ func realMain() error {
 		return err
 	}
 
-	log.Info("Ending pathdb transaction")
 	return nil
 }
 
@@ -233,7 +222,6 @@ func createSigners(ctx context.Context, trustStore trust.Store) (*map[addr.IA]in
 }
 
 func createSigner(ctx context.Context, ia addr.IA, trustStore trust.Store) (infra.Signer, error) {
-	//log.Info(filepath.Join(fmt.Sprintf("%s/ISD%d/AS%s", *scionGen, ia.I, ia.A.FileFmt()), "keys"))
 	gen := trust.SignerGen{
 		IA: ia,
 		KeyRing: keyconf.LoadingRing{
@@ -320,7 +308,7 @@ func createScionSegment(segment Segment, signers *map[addr.IA]infra.Signer) (*se
 		Shortcut: false,
 		Peer:     false,
 		TsInt:    shared.TsNow32,
-		ISD:      segment.DstISD, //srcISD?
+		ISD:      segment.DstISD,
 		Hops:     segment.NbHops,
 	}
 	scionSegment, err := seg.NewSeg(infoField)
@@ -363,7 +351,7 @@ func createScionASEntry(asEntry ASEntry) seg.ASEntry {
 
 	scionASEntry := seg.ASEntry{
 		RawIA:      IAIntFromString(asEntry.IA),
-		HopEntries: []*seg.HopEntry{hopEntry}, // can we have more than one?
+		HopEntries: []*seg.HopEntry{hopEntry},
 		MTU:        1500,
 		TrcVer:     1,
 		CertVer:    1,

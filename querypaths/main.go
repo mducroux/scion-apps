@@ -22,11 +22,11 @@ var (
 	execTime time.Duration
 )
 
-type PathSamples struct {
-	Samples []Sample `json:"path_samples"`
+type DstIAs struct {
+	IAs []DstIA `json:"destination_ias"`
 }
 
-type Sample struct {
+type DstIA struct {
 	IA      string `json:"IA"`
 	NbPaths int    `json:"nb_paths"`
 }
@@ -40,7 +40,7 @@ type ResultExperiment struct {
 	ExecTime int
 }
 
-const NbExperiment = 100
+const NbExperiment = 10
 
 func main() {
 	if err := realMain(); err != nil {
@@ -59,19 +59,19 @@ func realMain() error {
 		return err
 	}
 
-	data, err := ioutil.ReadFile("path_samples.json")
+	data, err := ioutil.ReadFile("destination_ias.json")
 	if err != nil {
 		return fmt.Errorf("error reading file")
 	}
 
-	var pathSamples PathSamples
-	if err := json.Unmarshal(data, &pathSamples); err != nil {
+	var destIAs DstIAs
+	if err := json.Unmarshal(data, &destIAs); err != nil {
 		return fmt.Errorf("error unmarshalling")
 	}
 
-	results := make([]ResultExperiment, len(pathSamples.Samples))
-	for i := 0; i < len(pathSamples.Samples); i++ {
-		result, err := runExperiment(pathSamples.Samples[i], ctx, sdConn)
+	results := make([]ResultExperiment, len(destIAs.IAs))
+	for i := 0; i < len(destIAs.IAs); i++ {
+		result, err := runExperiment(destIAs.IAs[i], ctx, sdConn)
 		if err != nil {
 			return err
 		}
@@ -87,15 +87,15 @@ func realMain() error {
 	return nil
 }
 
-func runExperiment(sample Sample, ctx context.Context, sdConn sciond.Connector) (ResultExperiment, error) {
+func runExperiment(dstIA DstIA, ctx context.Context, sdConn sciond.Connector) (ResultExperiment, error) {
 	execTimeRes := make([]int, NbExperiment)
-	dstIA, err := addr.IAFromString(sample.IA)
+	ia, err := addr.IAFromString(dstIA.IA)
 	if err != nil {
 		return ResultExperiment{}, err
 	}
 
 	for i := 0; i < NbExperiment; i++ {
-		if _, err := getPaths(sdConn, ctx, dstIA); err != nil {
+		if _, err := getPaths(sdConn, ctx, ia); err != nil {
 			return ResultExperiment{}, err
 		}
 		execTimeRes[i] = int(execTime.Milliseconds())
@@ -107,7 +107,7 @@ func runExperiment(sample Sample, ctx context.Context, sdConn sciond.Connector) 
 	avgExecTime /= NbExperiment
 
 	result := ResultExperiment{
-		NbPaths:  sample.NbPaths,
+		NbPaths:  dstIA.NbPaths,
 		ExecTime: avgExecTime,
 	}
 
@@ -123,10 +123,12 @@ func measureTime() func() {
 
 func getPaths(sdConn sciond.Connector, ctx context.Context, dstIA addr.IA) ([]snet.Path, error) {
 	defer measureTime()()
+
 	_, err := sdConn.Paths(ctx, dstIA, addr.IA{},
 		sciond.PathReqFlags{Refresh: *refresh})
 	if err != nil {
 		return nil, err
 	}
+
 	return nil, nil
 }
